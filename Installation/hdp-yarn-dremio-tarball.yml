@@ -1,0 +1,287 @@
+---
+- name: Install Dremio on HDP YARN
+  gather_facts: true
+  hosts: all
+  vars:
+    ambariRepo: http://public-repo-1.hortonworks.com/ambari/centos7/2.x/updates/2.6.2.2/ambari.repo
+    admin_user: dremio
+
+  tasks:
+  - name: write the standard server host file
+    template:
+      src: hosts
+      dest: /etc/hosts
+    become: true
+
+  - name: Turn off transparent huge pages
+    shell: "echo 'never' > /sys/kernel/mm/transparent_hugepage/enabled"
+    become: true
+
+#
+#  - name: Add HDP Ambari assumed components
+#    yum: name={{item.name}} state=latest
+#    with_items:
+#    - { name: 'wget'}
+#    - { name: 'libpcap'}
+#    - { name: 'libpcap-devel'}
+#    - { name: 'ncurses'}
+#    - { name: 'ncurses-devel'}
+#    - { name: 'epel-release'}
+#    - { name: 'unzip'}
+#    - { name: 'yum-utils'}
+#    - { name: 'createrepo'}
+#    - { name: 'yum-plugin-priorities'}
+#    - { name: 'git'}
+#    - { name: 'ntp'}
+#    - { name: 'ntpdate'}
+#    - { name: 'tcpdump' }
+#    - { name: 'nmap' }
+#    - { name: 'iftop' }
+#    - { name: 'sysstat' }
+#    - { name: 'ansible' }
+#    - { name: 'net-tools' }
+#    - { name: 'libselinux-python'}
+#    - { name: 'lsof' }
+#    - { name: 'snappy-devel' }
+#    - { name: 'postgresql-jdbc' }
+#    - { name: 'java-1.8.0-openjdk-devel.x86_64' }
+#    become: true
+  - name: Add repository
+    get_url: url={{ ambariRepo}} dest=/etc/yum.repos.d
+    become: true
+
+  - name: Apply networking template
+    template: src=files/sysconfig_network dest=/etc/sysconfig/network
+    become: true
+
+#  - name: add Dremio group
+#    group: name=dremio state=present system=yes
+#    become: yes
+
+  - name: add hdfs group
+    group: name=hdfs state=present system=yes
+    become: yes
+
+#  - name: Create admin user
+#    user: name={{admin_user}} shell=/bin/bash state=present system=yes groups=dremio,wheel,hdfs home=/var/lib/dremio shell=/sbin/nologin password="{{ 'password' | password_hash('sha512') }}"
+#    become: yes
+
+#  - name: Create directories
+#    file: path={{item}} state=directory owner=dremio group=dremio
+#    become: yes
+#    with_items:
+#      - /var/run/dremio
+#      - /opt/dremio
+#      - /var/log/dremio
+#      - /var/lib/dremio
+#      - /etc/dremio
+
+
+##
+####  Setup the HDP Cluster
+#### Links: https://cwiki.apache.org/confluence/display/AMBARI/Blueprints
+- remote_user: centos
+  hosts: hdp_agent
+  name: Setup the Ambari-Agents
+  tasks:
+  - name: Create agent data directory
+    file: path=/var/lib/ambari-agent/data state=directory
+    become: true
+  - name: Install Ambari-agent
+    yum: name=ambari-agent state=latest
+    become: true
+
+  - name: Update for ssl p1
+    ini_file:
+      path: /etc/ambari-agent/conf/ambari-agent.ini
+      section: security
+      option: force_https_protocol
+      value: PROTOCOL_TLSv1_2
+    become: true
+
+  - name: Assign Ambari-server hostname to the agent
+    ini_file:
+      path: /etc/ambari-agent/conf/ambari-agent.ini
+      section: hostname
+      option: hostname
+      value: "{{groups['ambari'][0]}}"
+    become: true
+
+  - name: Update for ssl p2
+    ini_file:
+      path: /etc/python/cert-verification.cfg
+      section: https
+      option: verify
+      value: disable
+    become: true
+#  - name: Setup mysql repository
+#    shell: "yum localinstall https://dev.mysql.com/get/mysql57-community-release-el7-9.noarch.rpm"
+#    become: true
+
+
+  - name: Start Ambari-agent
+    service: name=ambari-agent enabled=yes state=started
+    become: true
+
+#- remote_user: centos
+#  hosts: hdp_master
+#  name: Setup the Ambari-Master Nodes
+#  tasks:
+#  - name: Create agent data directory
+#    file: path=/var/lib/ambari-agent/data state=directory
+#    become: true
+#  - name: Install Ambari-agent
+#    yum: name=ambari-agent state=latest
+#    become: true
+#
+#  - name: Update for ssl p1
+#    ini_file:
+#      path: /etc/ambari-agent/conf/ambari-agent.ini
+#      section: security
+#      option: force_https_protocol
+#      value: PROTOCOL_TLSv1_2
+#    become: true
+#
+#  - name: Update for ssl p2
+#    ini_file:
+#      path: /etc/python/cert-verification.cfg
+#      section: https
+#      option: verify
+#      value: disable
+#    become: true
+#  - name: Start Ambari-agent
+#    service: name=ambari-agent enabled=yes state=started
+#    become: true
+
+
+- remote_user: centos
+  hosts: ambari
+  strategy: linear
+  name: Install and setup Ambari-server
+  vars:
+    ambariRepo: http://public-repo-1.hortonworks.com/ambari/centos7/2.x/updates/2.6.1.5/ambari.repo
+    mysql: mysql-connector-java-5.1.47.jar
+    blueprint: simple_cluster.json
+    HDP_Repo: XX
+    HDP_UTILS: XX
+    hostmap: hostmap.json
+    Cluster_Name: HDP_DREMIO
+  tasks:
+  - name: Install ambari server
+    yum: name=ambari-server state=latest
+    become: true
+
+  - name: Deploy the MYSQL connector jar
+    copy: src=jars/{{mysql}} dest=/home/centos/mysql-connector-java.jar
+
+  - name: Deploy the MYSQL connector to the ambari-server resources dir
+    copy: src=jars/{{mysql}} dest=/var/lib/ambari-server/resources/mysql-connector-java.jar
+    become: true
+
+
+  - name: Setup ambari-server with defaults
+    shell: "ambari-server setup -s"
+    become: true
+  - name: turn off csrf
+    ini_file:
+      section: default
+      path: /etc/ambari-server/conf/ambari.properties
+      option: api.csrfPrevention.enabled
+      value: false
+    become: true
+
+  - name: Setup MySQL connector
+    shell: "ambari-server setup --jdbc-db=mysql --jdbc-driver=/home/centos/mysql-connector-java.jar"
+    become: true
+
+  - name: sleep while waiting for Ambari server setup
+    shell: "sleep 100"
+  - name: Start Ambari server
+    shell: "ambari-server restart"
+    become: true
+
+#  - name: sleep while waiting for Ambari server start
+#    shell: "sleep 100"
+#  -
+
+
+
+- name: Install Dremio Master/Coordinator
+  gather_facts: false
+  hosts: master
+  vars:
+    dremio: dremio-enterprise-3.1.9-201904051346520183-a35b753.tar
+    namenode: "XXX"
+
+  tasks:
+  - name: Copy Dremio tar ball to server
+    copy: src=jars/{{dremio}} dest=/
+    become: yes
+
+  - name: create opt/dremio directory
+    file: name=/opt/dremio state=directory group=dremio owner=dremio
+    become: true
+
+  - name: Untar Dremio
+    shell: 'tar xvf /{{dremio}} -C /opt/dremio --strip-components=1'
+    become: yes
+    become_user: dremio
+
+  - name: Set dremio-env for master
+    template: src=dremio_conf/dremio-env dest=/opt/dremio/conf/dremio-env force=yes owner=dremio group=dremio
+    become: yes
+
+  - name: Set logback-access.xml for master
+    copy: src=dremio_conf/logback-access.xml dest=/opt/dremio/conf/logback-access.xml force=yes owner=dremio group=dremio
+    become: yes
+
+  - name: Set logback for master
+    copy: src=dremio_conf/logback.xml dest=/opt/dremio/conf/logback.xml force=yes owner=dremio group=dremio
+    become: yes
+
+
+  - name: make dremio log directory
+    file: path=/opt/dremio/log state=directory
+    become: yes
+    become_user: dremio
+
+  - name: Change permissions
+    shell: "sudo chown -R dremio /etc/dremio"
+
+  - name: Change group
+    shell: "sudo chgrp -R dremio /etc/dremio"
+
+  - name: change permissions
+    shell: "sudo chmod -R 777 /etc/dremio"
+
+  - name: Setup service
+    copy: src=dremio_conf/dremio.service dest=/etc/systemd/system/dremio.service force=yes
+    become: yes
+
+  - name: restart systemd
+    shell: "sudo systemctl daemon-reload"
+    become: yes
+
+  - name: enable dremio
+    shell: "sudo systemctl enable dremio"
+    become: yes
+
+#  - name: start dremio
+#    shell: "sudo systemctl start dremio"
+#    become: yes
+
+#- name: Install HDP Services with HDP
+#  gather_facts: false
+#  hosts: ambari
+#  tasks:
+#
+#  - name: Register the blueprint with the server
+#    shell: 'curl -H "X-Requested-By: ambari" -X POST -u admin:admin http://{{inventory_hostname}}:8080/api/v1/blueprints/base_blueprint -d @base_blueprint.json'
+#
+#  - name: Create the cluster
+#    shell: 'curl -H "X-Requested-By: ambari" -X POST -u admin:admin http://{{inventory_hostname}}:8080/api/v1/clusters/HDP -d @ambari_nodes.json'
+#
+#
+
+# curl -H "X-Requested-By: ambari" -X POST -u admin:admin http://54.193.69.61:8080/api/v1/blueprints/base_blueprint -d @base_blueprint.json
+# curl -H "X-Requested-By: ambari" -X POST -u admin:admin http://54.193.69.61:8080/api/v1/clusters/HDP -d @ambari_nodes.json

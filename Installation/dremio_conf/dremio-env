@@ -1,0 +1,39 @@
+#
+#DREMIO_MAX_PERMGEN_MEMORY_SIZE_MB=512
+
+#
+# Garbage collection logging is enabled by default. Set the following
+# parameter to "no" to disable garbage collection logging.
+#
+#DREMIO_GC_LOGS_ENABLED="yes"
+
+#
+# The scheduling priority for the server
+#
+# Default to 0
+#
+# DREMIO_NICENESS=0
+#
+
+#
+# Number of seconds after which the server is killed forcibly it it hasn't stopped
+#
+# Default to 120
+#
+#DREMIO_STOP_TIMEOUT=120
+
+# Extra Java options - shared between dremio and dremio-admin commands
+#
+#DREMIO_JAVA_EXTRA_OPTS=
+
+# Extra Java options - client only (dremio-admin command)
+#
+#DREMIO_JAVA_CLIENT_EXTRA_OPTS=
+
+# Extra Java options - server only (dremio command)
+#
+#DREMIO_JAVA_SERVER_EXTRA_OPTS=
+
+DREMIO_MAX_MEMORY_SIZE_MB=16384
+DREMIO_MAX_HEAP_MEMORY_SIZE_MB=8192
+DREMIO_MAX_DIRECT_MEMORY_SIZE_MB=16384

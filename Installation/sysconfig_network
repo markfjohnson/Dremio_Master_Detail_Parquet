@@ -1,0 +1,4 @@
+# Created by cloud-init on instance boot automatically, do not edit.
+#
+NETWORKING=yes
+HOSTNAME={{inventory_hostname}}

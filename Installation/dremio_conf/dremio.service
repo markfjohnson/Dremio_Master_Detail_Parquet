@@ -1,0 +1,15 @@
+[Unit]
+ Description=Dremio Daemon Server
+ Documentation=https://docs.dremio.com
+ Wants=network-online.target
+ After=network-online.target
+
+ [Service]
+ User=dremio
+ Group=dremio
+ RuntimeDirectory=dremio
+ ExecStart=/opt/dremio/bin/dremio start-fg
+ Restart=on-failure
+
+ [Install]
+ WantedBy=multi-user.target

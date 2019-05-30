@@ -1,0 +1,20 @@
+---
+- name: Install Dremio on HDP YARN
+  gather_facts: false
+  hosts: ambari
+  vars:
+    ambariRepo: http://public-repo-1.hortonworks.com/ambari/centos7/2.x/updates/2.6.2.2/ambari.repo
+    admin_user: dremio
+    blueprint: base_blueprint.json
+    host_mapping_file: ambari_nodes.json
+    blueprint_name: hdp_blueprint
+    cluster_name: HDP
+
+
+  tasks:
+  - name: Register Ambari Blueprint
+    shell: "curl -H \"X-Requested-By: ambari\" -X POST -u admin:admin http://{{inventory_hostname}}:8080/api/v1/blueprints/{{blueprint_name}} -d @{{blueprint}}"
+# curl -H "X-Requested-By: ambari" -X POST -u admin:admin http://54.153.54.235:8080/api/v1/blueprints/hdp_blueprint -d @base_blueprint.json
+
+  - name: Commence blueprint based HDP installation
+    shell: "curl -H \"X-Requested-By: ambari\" -X POST -u admin:admin http://{{inventory_hostname}}:8080/api/v1/clusters/{{cluster_name}} -d @{{host_mapping_file}}"
