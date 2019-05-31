@@ -22,7 +22,7 @@ resource "aws_instance" "ambari" {
     volume_size = 100
     delete_on_termination = true
   }
-  count = 1
+  count = 0
   tags = {
     Name = "Ambari"
   }
@@ -46,7 +46,7 @@ resource "aws_instance" "hdp-agent" {
     delete_on_termination = true
   }
 
-  count = 6
+  count = 0
   security_groups = [
     "${aws_security_group.dremio-yarn-sec-grp.id}"]
   tags = {

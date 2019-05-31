@@ -3,8 +3,10 @@ import json
 from pyspark import SparkConf
 from pyspark.sql import SparkSession
 from pyspark.sql.types import *
+
 import os
 import time
+import datetime
 
 
 
@@ -12,7 +14,8 @@ import time
 ## Program parameters
 user_name = "mark"
 password = "dremio1_jpmc1"
-dremio_coord_host = "localhost"
+#dremio_coord_host = "localhost"
+dremio_coord_host="54.183.78.241"
 
 # Define Master source table
 master_table = "myspace.Department"
@@ -31,13 +34,14 @@ s3_bucket = "dremio-dwn"
 # Define the Master-detail output schema
 master_detail_schema = StructType([
     StructField('dept_id', StringType()),
-    StructField('dept_name', StringType()),
+    StructField('dept_code', StringType()),
+    StructField('emp_count', IntegerType()),
+    StructField('DeptSalary', FloatType()),
     StructField('emp_detail', ArrayType(
         StructType([
-            StructField("emp_id", StringType()),
             StructField("dept_id", StringType()),
-            StructField("name", StringType()),
-            StructField("hire_date", StringType())
+            StructField("emp_id", StringType()),
+            StructField("Salary", StringType())
         ])
     ))])
 
@@ -118,22 +122,27 @@ def main():
     print("Beginning Master Detail creation process")
     df_master = get_table_df(user_name, password, master_table)
     df_detail = get_table_df(user_name, password, detail_table)
+    print("Tables loaded into Pandas. Creating Master Detail Join")
     df_master_detail = create_master_detail(df_master, master_fld_id, df_detail, detail_fld_id)
+    print("Finished Master Detail Join")
     df_final = spark.createDataFrame(df_master_detail, schema=master_detail_schema)
     df_final.write.parquet(master_detail_filename)
+
     print("Created a Master detail output file {} and stored in the local directory".format(master_detail_filename))
     print("Moving master detail file to s3 bucket {}".format(s3_bucket))
-    time.sleep(15) # give spark enough time to write the parquet file
+#    time.sleep(5) # give spark enough time to write the parquet file
     #
     # Now push the created Master Detail Parquet file to S3 Bucket
     cmd = "aws s3 cp --recursive {}/ s3://{}".format(master_detail_filename, s3_bucket)
-    print("File transferred to s3")
+
     print(cmd)
     os.system(cmd)
-
     # Then update the master-detail source with the new file assumes a master
+    time.sleep(15)
+    print("File transferred to s3")
     token = login_dremio(user_name, password, dremio_coord_host)
     create_s3_datasource(s3_bucket, token, dremio_coord_host)
+
     print("The Master-Detail parquet file is now available for queries.")
 
 
